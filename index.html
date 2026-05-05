@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macrotonal Ear Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Cormorant+SC:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #070a08; --text: #d4e8d8;
+  --text-dim: rgba(212,232,216,0.45); --text-faint: rgba(212,232,216,0.2);
+  --border: rgba(74,158,104,0.15); --card: rgba(10,16,12,0.95);
+  --red:#ff6b55; --yellow:#ffd84a; --green:#4ed87a; --blue:#5ab4ff;
+}
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  min-height: 100vh; padding: 32px 16px 48px;
+}
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none;
+  background: radial-gradient(ellipse at 20% 70%, rgba(15,50,25,0.2) 0%, transparent 55%),
+              radial-gradient(ellipse at 80% 20%, rgba(10,35,18,0.15) 0%, transparent 55%);
+}
+.frame { position:fixed; inset:10px; border:1px solid rgba(74,158,104,0.1); pointer-events:none; }
+.wrap { position:relative; max-width:940px; margin:0 auto; }
+
+.header { text-align:center; margin-bottom:28px; }
+.eyebrow { font-size:9px; letter-spacing:7px; text-transform:uppercase; color:rgba(74,158,104,0.45); margin-bottom:12px; display:block; }
+h1 { font-size:clamp(22px,4vw,36px); font-weight:300; font-style:italic; color:#e4f2e8; margin-bottom:6px; }
+.sub { font-size:13px; color:var(--text-dim); }
+.rule { width:40px; height:1px; background:linear-gradient(90deg,transparent,rgba(74,158,104,0.4),transparent); margin:14px auto; }
+
+.legend { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; }
+.legend-item { display:flex; align-items:center; gap:8px; background:var(--card);
+  border:1px solid var(--border); border-radius:3px; padding:6px 12px; font-size:12px; color:var(--text-dim); }
+.legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.legend-sub { font-size:10px; color:var(--text-faint); margin-top:1px; }
+
+.cycle-wrap { display:flex; gap:8px; justify-content:center; margin-bottom:18px; flex-wrap:wrap; }
+.cycle-btn {
+  background:transparent; border:1px solid rgba(74,158,104,0.18);
+  color:var(--text-dim); padding:6px 16px; border-radius:2px;
+  font-family:'Cormorant SC',serif; font-size:11px; letter-spacing:3px;
+  cursor:pointer; transition:all 0.2s;
+}
+.cycle-btn.active { border-color:rgba(74,158,104,0.5); color:var(--text); background:rgba(74,158,104,0.08); }
+
+.detail-panel {
+  background:var(--card); border:1px solid var(--border); border-radius:4px;
+  padding:14px 20px; margin-bottom:16px; min-height:58px;
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  transition:border-color 0.3s;
+}
+.detail-note { font-size:30px; font-weight:400; line-height:1; min-width:52px; }
+.detail-name { font-size:14px; margin-bottom:3px; }
+.detail-meta { font-size:11px; color:var(--text-dim); }
+.detail-badge { font-size:9px; letter-spacing:3px; text-transform:uppercase;
+  padding:3px 10px; border-radius:2px; white-space:nowrap; }
+.detail-empty { font-size:13px; color:var(--text-faint); font-style:italic; }
+
+.staff-section {
+  background:var(--card); border:1px solid var(--border); border-radius:4px;
+  padding:18px 14px 14px; margin-bottom:14px; overflow-x:auto;
+}
+.clef-label { font-size:9px; letter-spacing:5px; text-transform:uppercase;
+  color:var(--text-faint); margin-bottom:10px; display:block; }
+
+.play-all-wrap { text-align:center; margin:6px 0 20px; }
+.play-all-btn {
+  background:transparent; border:1px solid var(--border);
+  color:var(--text-dim); padding:10px 28px; border-radius:2px;
+  font-family:'Cormorant Garamond',serif; font-size:14px; letter-spacing:2px;
+  cursor:pointer; transition:all 0.2s;
+}
+.play-all-btn:hover { border-color:rgba(74,158,104,0.4); color:var(--text); }
+.footer { text-align:center; font-size:9px; color:var(--text-faint); letter-spacing:3px; text-transform:uppercase; margin-top:20px; }
+
+.note-g { cursor:pointer; }
+.note-g:hover ellipse { opacity:0.65 !important; }
+.note-g.playing ellipse { opacity:1 !important; filter:drop-shadow(0 0 4px currentColor); }
+</style>
+</head>
+<body>
+<div class="frame"></div>
+<div class="wrap">
+
+  <div class="header">
+    <span class="eyebrow">Macrotonal Tuning System</span>
+    <h1>Ear Training Guide</h1>
+    <div class="sub">Click any note to hear it · bass clef = lower range · treble = upper range</div>
+    <div class="rule"></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>
+      <div><div>Red</div><div class="legend-sub">No adjustment</div></div></div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>
+      <div><div>Yellow</div><div class="legend-sub">+25¢ sharp</div></div></div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>
+      <div><div>Green</div><div class="legend-sub">−50¢ flat</div></div></div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>
+      <div><div>Blue</div><div class="legend-sub">−25¢ flat</div></div></div>
+  </div>
+
+  <div class="cycle-wrap" id="cycleWrap"></div>
+
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-empty">Click any note to hear it against the root</div>
+  </div>
+
+  <div class="staff-section">
+    <span class="clef-label" id="trebleLabel">Treble clef</span>
+    <svg id="trebleSvg" style="display:block;min-width:100%"></svg>
+  </div>
+
+  <div class="staff-section">
+    <span class="clef-label" id="bassLabel">Bass clef</span>
+    <svg id="bassSvg" style="display:block;min-width:100%"></svg>
+  </div>
+
+  <div class="play-all-wrap">
+    <button class="play-all-btn" id="playAllBtn" onclick="playScale()">▶ Play both staves ascending</button>
+  </div>
+
+  <div class="footer">Root C3 Ableton = C4 Musescore · 125¢ per step · 1500¢ per cycle</div>
+</div>
+
+<script>
+const BASE = 261.63
+const CS   = 125
+const STD  = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+const DIAT = {C:0,D:1,E:2,F:3,G:4,A:5,B:6}
+const DNAMES = ['Unison','Macro 2nd','Macro 3rd','Neutral 3rd','Pure 4th','Wide Tritone',
+                'Macro 6th','Near Maj. 6th','Pure Min. 7th','Wide Maj. 7th','Macro 9th','Macro 10th']
+const COLS = [
+  {name:'Red',    hex:'#ff6b55', bg:'rgba(255,107,85,0.12)',  border:'rgba(255,107,85,0.4)',  adj:'No adjustment'},
+  {name:'Yellow', hex:'#ffd84a', bg:'rgba(255,216,74,0.12)',  border:'rgba(255,216,74,0.4)',  adj:'+25¢ sharp'},
+  {name:'Green',  hex:'#4ed87a', bg:'rgba(78,216,122,0.12)', border:'rgba(78,216,122,0.4)',  adj:'−50¢ flat'},
+  {name:'Blue',   hex:'#5ab4ff', bg:'rgba(90,180,255,0.12)', border:'rgba(90,180,255,0.4)',  adj:'−25¢ flat'},
+]
+const hz = c => BASE * Math.pow(2, c / 1200)
+
+function makeNote(step) {
+  const cents = step * CS
+  const std   = Math.round(step * 125 / 100)
+  const idx   = ((std % 12) + 12) % 12
+  const name  = STD[idx]
+  const aoct  = 3 + Math.floor(std / 12)
+  const deg   = ((step % 12) + 12) % 12
+  const base  = name.replace('#','')
+  return {
+    step, cents, freq: hz(cents),
+    noteName: name, abletonOct: aoct,
+    deg, degreeNum: deg + 1, degreeName: DNAMES[deg],
+    col: COLS[deg % 4],
+    diatPos: DIAT[base] + (aoct - 3) * 7,
+    isSharp: name.includes('#'),
+  }
+}
+const range = (start, len=12) => Array.from({length:len}, (_,i) => makeNote(start+i))
+
+// ── Audio ─────────────────────────────────────────────────────
+let ctx=null, oscs=[], active=null
+const ac = () => { if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)(); if(ctx.state==='suspended') ctx.resume(); return ctx }
+function killAll() {
+  oscs.forEach(o=>{try{o.stop()}catch(e){}})
+  oscs=[]
+  if(active!==null) { document.querySelectorAll(`[data-step="${active}"]`).forEach(e=>e.classList.remove('playing')); active=null }
+}
+function tone(cents,t,dur,vol=0.2) {
+  const c=ac(), o=c.createOscillator(), g=c.createGain()
+  o.type='sine'; o.frequency.value=hz(cents)
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.04); g.gain.exponentialRampToValueAtTime(0.001,t+dur)
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.06); oscs.push(o)
+}
+function playNote(n) {
+  killAll()
+  active = n.step
+  document.querySelectorAll(`[data-step="${n.step}"]`).forEach(e=>e.classList.add('playing'))
+  const t=ac().currentTime
+  tone(0, t, 2.8, 0.16)
+  tone(n.cents, t, 2.8, 0.2)
+  setTimeout(()=>{ document.querySelectorAll(`[data-step="${n.step}"]`).forEach(e=>e.classList.remove('playing')); if(active===n.step) active=null }, 3000)
+  // Detail
+  const c=n.col
+  const dp = document.getElementById('detailPanel')
+  dp.style.borderColor = c.border
+  dp.innerHTML = `
+    <div class="detail-note" style="color:${c.hex}">${n.noteName}${n.abletonOct}</div>
+    <div style="flex:1">
+      <div class="detail-name" style="color:${c.hex}">${n.degreeName} · Degree ${n.degreeNum}</div>
+      <div class="detail-meta">${n.freq.toFixed(2)} Hz · ${n.cents}¢ from root · ${c.adj}</div>
+    </div>
+    <div class="detail-badge" style="background:${c.bg};border:1px solid ${c.border};color:${c.hex}">${c.name}</div>
+  `
+}
+function playScale() {
+  killAll()
+  const btn=document.getElementById('playAllBtn')
+  btn.textContent='Playing…'; btn.disabled=true
+  const all=[...range(cur*12-12), ...range(cur*12)]
+  const t=ac().currentTime
+  all.forEach((n,i) => tone(n.cents, t+i*0.52, 0.48, 0.2))
+  setTimeout(()=>{ btn.textContent='▶ Play both staves ascending'; btn.disabled=false }, all.length*520+400)
+}
+
+// ── Staff drawing ─────────────────────────────────────────────
+const LS=10, NR=6, ML=50, MR=14
+const STOP=52, SBOT=STOP+4*LS   // staff top y=52, bot y=92
+const SVGH=SBOT+62
+
+function sy(clef, dp) {
+  // Treble: bottom line = E3 Ableton = diatPos 2
+  // y = SBOT - (dp - 2) * LS/2
+  if (clef==='treble') return SBOT - (dp - 2) * (LS/2)
+  // Bass: bottom line = G1 Ableton = diatPos -10
+  // y = SBOT - (dp + 10) * LS/2
+  return SBOT - (dp + 10) * (LS/2)
+}
+
+function draw(svgId, clef, startStep) {
+  const svg=document.getElementById(svgId)
+  svg.innerHTML=''
+  const ns='http://www.w3.org/2000/svg'
+  const mk=(tag,attrs,txt)=>{ const e=document.createElementNS(ns,tag); Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v)); if(txt!==undefined) e.textContent=txt; return e }
+
+  const notes=range(startStep)
+  const cw=svg.parentElement.clientWidth-28
+  const sp=Math.max(42,Math.min(60,(cw-ML-MR)/notes.length))
+  const W=Math.max(cw, ML+notes.length*sp+MR)
+  svg.setAttribute('viewBox',`0 0 ${W} ${SVGH}`)
+  svg.setAttribute('width',W)
+  svg.setAttribute('height',SVGH)
+
+  // Staff lines
+  for(let i=0;i<5;i++) svg.appendChild(mk('line',{x1:ML-6,y1:STOP+i*LS,x2:W-MR,y2:STOP+i*LS,stroke:'rgba(212,232,216,0.22)','stroke-width':'0.8'}))
+
+  // Clef
+  svg.appendChild(mk('text',{x:6,y:clef==='treble'?STOP+30:STOP+22,'font-size':clef==='treble'?'52':'36',fill:'rgba(212,232,216,0.28)','font-family':'serif'},clef==='treble'?'𝄞':'𝄢'))
+
+  notes.forEach((n,i)=>{
+    const x=ML+i*sp+sp/2
+    const y=sy(clef,n.diatPos)
+    const col=n.col
+
+    // Ledger lines below staff
+    for(let ly=SBOT+LS; ly<=y+1; ly+=LS)
+      svg.appendChild(mk('line',{x1:x-NR-3,y1:ly,x2:x+NR+3,y2:ly,stroke:'rgba(212,232,216,0.28)','stroke-width':'0.8'}))
+    // Ledger lines above staff
+    for(let ly=STOP-LS; ly>=y-1; ly-=LS)
+      svg.appendChild(mk('line',{x1:x-NR-3,y1:ly,x2:x+NR+3,y2:ly,stroke:'rgba(212,232,216,0.28)','stroke-width':'0.8'}))
+
+    const g=document.createElementNS(ns,'g')
+    g.setAttribute('class','note-g')
+    g.setAttribute('data-step',n.step)
+    g.addEventListener('click',()=>playNote(n))
+
+    // Note head
+    g.appendChild(mk('ellipse',{cx:x,cy:y,rx:NR,ry:NR*0.72,fill:col.hex,opacity:'0.88'}))
+
+    // Sharp
+    if(n.isSharp) g.appendChild(mk('text',{x:x-NR-6,y:y+4,'font-size':'9',fill:col.hex,opacity:'0.75','font-family':'serif'},'♯'))
+
+    // Stem
+    const up=y>STOP+2*LS
+    const sx2=up?x+NR-1:x-NR+1
+    g.appendChild(mk('line',{x1:sx2,y1:y,x2:sx2,y2:y+(up?-26:26),stroke:col.hex,'stroke-width':'1.2',opacity:'0.62'}))
+
+    // Octave label
+    g.appendChild(mk('text',{x,y:SVGH-10,'text-anchor':'middle','font-size':'8.5',fill:col.hex,opacity:'0.5','font-family':'Cormorant SC, serif'},n.noteName+n.abletonOct))
+
+    // Degree number
+    g.appendChild(mk('text',{x,y:11,'text-anchor':'middle','font-size':'7.5',fill:col.hex,opacity:'0.38','font-family':'Cormorant SC, serif'},n.degreeNum+''))
+
+    svg.appendChild(g)
+  })
+}
+
+// ── Cycle selector ────────────────────────────────────────────
+// cycle 0: treble=steps 0–11 (C3–), bass=steps -12 to -1 (below C3)
+// cycle 1: treble=12–23, bass=0–11
+// cycle -1: treble=-12 to -1, bass=-24 to -13
+const CYCLES=[
+  {label:'C1–B2 Abl', sub:'bass C1, treble C3', val:-1},
+  {label:'C3–B4 Abl · Root', sub:'bass below C3, treble from root', val:0},
+  {label:'C5–B6 Abl', sub:'upper range', val:1},
+]
+let cur=0
+
+function setCycle(val) {
+  cur=val
+  document.querySelectorAll('.cycle-btn').forEach(b=>b.classList.toggle('active',+b.dataset.val===val))
+  draw('trebleSvg','treble',val*12)
+  draw('bassSvg','bass',val*12-12)
+  const dp=document.getElementById('detailPanel')
+  dp.style.borderColor=''
+  dp.innerHTML='<div class="detail-empty">Click any note to hear it against the root</div>'
+  // Update labels
+  const tStart=makeNote(val*12), bStart=makeNote(val*12-12)
+  const tEnd=makeNote(val*12+11), bEnd=makeNote(val*12-1)
+  document.getElementById('trebleLabel').textContent=`Treble clef · ${tStart.noteName}${tStart.abletonOct} – ${tEnd.noteName}${tEnd.abletonOct} Ableton`
+  document.getElementById('bassLabel').textContent=`Bass clef · ${bStart.noteName}${bStart.abletonOct} – ${bEnd.noteName}${bEnd.abletonOct} Ableton`
+}
+
+function buildButtons() {
+  const w=document.getElementById('cycleWrap')
+  CYCLES.forEach(c=>{
+    const b=document.createElement('button')
+    b.className='cycle-btn'; b.dataset.val=c.val; b.textContent=c.label
+    b.onclick=()=>setCycle(c.val); w.appendChild(b)
+  })
+}
+
+buildButtons()
+setCycle(0)
+window.addEventListener('resize',()=>{ draw('trebleSvg','treble',cur*12); draw('bassSvg','bass',cur*12-12) })
+</script>
+</body>
+</html>
