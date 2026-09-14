@@ -227,6 +227,7 @@ h1{font-family:'Observer Cover','Futura','Century Gothic','Trebuchet MS',sans-se
           <option value="clarinet">Clarinet (Bb)</option>
           <option value="bass_clarinet">Bass Clarinet (Bb)</option>
         </select>
+        <select class="instrument-select" id="upperMode" onchange="onModeChange(this.value)" aria-label="Transposition mode" title="Transposition mode (applies to both staves)"></select>
         <select class="instrument-select" id="upperOttava" onchange="onInstrumentChange('upper')">
           <option value="ottava" selected>Ottava</option>
           <option value="8va">8va</option>
@@ -259,6 +260,7 @@ h1{font-family:'Observer Cover','Futura','Century Gothic','Trebuchet MS',sans-se
           <option value="clarinet">Clarinet (Bb)</option>
           <option value="bass_clarinet">Bass Clarinet (Bb)</option>
         </select>
+        <select class="instrument-select" id="lowerMode" onchange="onModeChange(this.value)" aria-label="Transposition mode" title="Transposition mode (applies to both staves)"></select>
         <select class="instrument-select" id="lowerOttava" onchange="onInstrumentChange('lower')">
           <option value="ottava" selected>Ottava</option>
           <option value="8va">8va</option>
@@ -300,33 +302,69 @@ const COLS = [
 ]
 const hz = c => BASE * Math.pow(2, c / 1200)
 
+// ── Macrotonal transposition modes ────────────────────────────
+// Offsets (semitones) from MacroMIDIConverter.py MODES; keys + labels as the web tuner.
+// Mode T, degree n: sounds 125n + 100T cents above BASE, is written (concert) on
+// semitone round(1.25n) + T, and keeps its colour ((n mod 12) mod 4).
+// cycleShift = whole 1500-cent cycles the register buttons (and the interval root)
+// move up, so the octave-down modes stay near Standard's register and every note
+// offered stays inside the converter's Ableton C0-B7 key range.
+const TRANSPOSITION_MODES = [
+  { key:'standard',  label:'Standard',                    offset:0,   cycleShift:0 },
+  { key:'4th_down',  label:'4th Down',                    offset:-5,  cycleShift:0 },
+  { key:'oct_down',  label:'Octave Down',                 offset:-12, cycleShift:1 },
+  { key:'2oct_down', label:'2 Octaves Down',              offset:-24, cycleShift:2 },
+  { key:'oct_up',    label:'Octave Up',                   offset:12,  cycleShift:0 },
+  { key:'5th_up',    label:'5th Up',                      offset:7,   cycleShift:0 },
+  { key:'m3_down',   label:'Minor 3rd Down (Viola Mode)', offset:-3,  cycleShift:0 },
+]
+const MODE_STORAGE_KEY = 'macroEarTrainer.transpositionMode'
+let tMode = TRANSPOSITION_MODES[0]
+const rootStep  = () => tMode.cycleShift * 12                     // degree of the interval-mode root
+const rootCents = () => rootStep() * CS + 100 * tMode.offset      // its sounding pitch above BASE
+const regStart  = (val = cur) => (val + tMode.cycleShift) * 12    // first degree of a register's upper staff
+
 // ── Instrument definitions ─────────────────────────────────────
+// transposeSemis = written minus concert, in 12-TET semitones. Instrument transposition
+// moves only the written note: never the sound, never the notehead colour.
 const INSTRUMENTS = {
-  treble:       { clef:'treble', transposeSteps:0,  transposeName:'' },
-  bass:         { clef:'bass',   transposeSteps:0,  transposeName:'' },
-  soprano_sax:  { clef:'treble', transposeSteps:2,  transposeName:'Written pitch is a Major 2nd higher than concert' },
-  alto_sax:     { clef:'treble', transposeSteps:7,  transposeName:'Written pitch is a Major 6th higher than concert' },
-  bari_sax:     { clef:'treble', transposeSteps:17, transposeName:'Written pitch is an octave + Major 6th higher than concert' },
-  clarinet:     { clef:'treble', transposeSteps:2,  transposeName:'Written pitch is a Major 2nd higher than concert' },
-  bass_clarinet:{ clef:'bass',   transposeSteps:11, transposeName:'Written pitch is an octave + Major 2nd higher than concert' },
+  treble:       { clef:'treble', transposeSemis:0,  transposeName:'' },
+  bass:         { clef:'bass',   transposeSemis:0,  transposeName:'' },
+  soprano_sax:  { clef:'treble', transposeSemis:2,  transposeName:'Written pitch is a Major 2nd higher than concert' },
+  alto_sax:     { clef:'treble', transposeSemis:9,  transposeName:'Written pitch is a Major 6th higher than concert' },
+  bari_sax:     { clef:'treble', transposeSemis:21, transposeName:'Written pitch is an octave + Major 6th higher than concert' },
+  clarinet:     { clef:'treble', transposeSemis:2,  transposeName:'Written pitch is a Major 2nd higher than concert' },
+  bass_clarinet:{ clef:'bass',   transposeSemis:14, transposeName:'Written pitch is an octave + Major 2nd higher than concert' },
+}
+
+// Name / octave / staff position of a written semitone (0 = middle C)
+function noteInfo(std) {
+  const idx  = ((std % 12) + 12) % 12
+  const name = STD[idx]
+  const aoct = 3 + Math.floor(std / 12)
+  return {
+    std, noteName: name, abletonOct: aoct,
+    diatPos: DIAT[name.replace('#','')] + (aoct - 3) * 7,
+    isSharp: name.includes('#'),
+  }
 }
 
 function makeNote(step) {
-  const cents = step * CS
-  const std   = Math.round(step * 125 / 100)
-  const idx   = ((std % 12) + 12) % 12
-  const name  = STD[idx]
-  const aoct  = 3 + Math.floor(std / 12)
-  const deg   = ((step % 12) + 12) % 12
-  const base  = name.replace('#','')
+  const T         = tMode.offset
+  const cents     = (step - rootStep()) * CS                // interval from the root
+  const playCents = step * CS + 100 * T                     // sounding pitch above BASE
+  const std       = Math.round(step * 125 / 100) + T        // written concert semitone
+  const w         = noteInfo(std)
+  const aoct      = w.abletonOct
+  const deg       = ((step % 12) + 12) % 12
   return {
-    step, cents, freq: hz(cents),
-    noteName: name, abletonOct: aoct,
+    step, cents, playCents, freq: hz(playCents), std,
+    noteName: w.noteName, abletonOct: aoct,
     displayOct: () => noteMode === 'score' ? aoct + 1 : aoct,
     deg, degreeNum: deg + 1, degreeName: DNAMES[deg],
     col: COLS[deg % 4],
-    diatPos: DIAT[base] + (aoct - 3) * 7,
-    isSharp: name.includes('#'),
+    diatPos: w.diatPos,
+    isSharp: w.isSharp,
   }
 }
 
@@ -432,8 +470,8 @@ function schedulePulse(n, iteration=0) {
   if (active !== n.step) return
   const offset = iteration === 0 ? 0.07 : 0
   const t = ac().currentTime + offset
-  mkOsc(n.cents, t, ON, 0.2, 0.05)
-  if (intervalMode) mkOsc(0, t, ON, 0.14, 0.05)
+  mkOsc(n.playCents, t, ON, 0.2, 0.05)
+  if (intervalMode) mkOsc(rootCents(), t, ON, 0.14, 0.05)
   pulseTimer = setTimeout(() => schedulePulse(n, iteration+1), (ON + OFF) * 1000)
 }
 
@@ -447,8 +485,8 @@ function playNote(n) {
   const t = ac().currentTime + FADE + 0.01
 
   if (playMode === 'single') {
-    mkOsc(n.cents, t, 2.6, 0.2)
-    if (intervalMode) mkOsc(0, t, 2.6, 0.14)
+    mkOsc(n.playCents, t, 2.6, 0.2)
+    if (intervalMode) mkOsc(rootCents(), t, 2.6, 0.14)
     setTimeout(()=>{
       document.querySelectorAll(`[data-step="${n.step}"]`).forEach(e=>e.classList.remove('playing'))
       if(active===n.step) { active=null; showIdleHint() }
@@ -458,7 +496,7 @@ function playNote(n) {
     const c = ac()
     const osc = c.createOscillator()
     const gain = c.createGain()
-    osc.type = 'sine'; osc.frequency.value = hz(n.cents)
+    osc.type = 'sine'; osc.frequency.value = hz(n.playCents)
     gain.gain.setValueAtTime(0, t)
     gain.gain.linearRampToValueAtTime(0.2, t + 0.06)
     osc.connect(gain); gain.connect(c.destination)
@@ -467,7 +505,7 @@ function playNote(n) {
     oscs.push(osc)
     if (intervalMode) {
       const o2 = c.createOscillator(), g2 = c.createGain()
-      o2.type='sine'; o2.frequency.value=hz(0)
+      o2.type='sine'; o2.frequency.value=hz(rootCents())
       g2.gain.setValueAtTime(0,t); g2.gain.linearRampToValueAtTime(0.13,t+0.06)
       o2.connect(g2); g2.connect(c.destination); o2.start(t)
       o2._gain = g2
@@ -497,9 +535,9 @@ function playScale() {
   killAll()
   const btn=document.getElementById('playAllBtn')
   btn.textContent='Playing…'; btn.disabled=true
-  const all=[...range(cur*12-12), ...range(cur*12)]
+  const all=[...range(regStart()-12), ...range(regStart())]
   const t=ac().currentTime
-  all.forEach((n,i) => mkOsc(n.cents, t+i*0.52, 0.48, 0.2, 0.03))
+  all.forEach((n,i) => mkOsc(n.playCents, t+i*0.52, 0.48, 0.2, 0.03))
   setTimeout(()=>{ btn.textContent='▶ Play both staves ascending'; btn.disabled=false }, all.length*520+400)
 }
 
@@ -513,12 +551,11 @@ function sy(clef, dp) {
   return SBOT - (dp + 10) * (LS/2)
 }
 
-function calcSvgHeight(clef, notes, transposeSteps) {
+function calcSvgHeight(clef, notes, transposeSemis) {
   // Find the highest note (lowest y value) to ensure it fits
   let minY = SVGH_BASE
   notes.forEach(n => {
-    const writtenStep = n.step + transposeSteps
-    const writtenRaw = makeNote(writtenStep)
+    const writtenRaw = noteInfo(n.std + transposeSemis)
     const y = sy(clef, writtenRaw.diatPos)
     if (y < minY) minY = y
   })
@@ -597,7 +634,7 @@ function draw(svgId, instrumentKey, startStep, ottavaMode = 'ottava') {
 
   const inst = INSTRUMENTS[instrumentKey]
   const clef = inst.clef
-  const transposeSteps = inst.transposeSteps
+  const transposeSemis = inst.transposeSemis
 
   const concertNotes = range(startStep)
 
@@ -606,8 +643,7 @@ function draw(svgId, instrumentKey, startStep, ottavaMode = 'ottava') {
   if (ottavaMode === 'off') {
     let minY = SVGH_BASE, maxY = 0
     concertNotes.forEach(n => {
-      const writtenStep = n.step + transposeSteps
-      const writtenRaw  = makeNote(writtenStep)
+      const writtenRaw  = noteInfo(n.std + transposeSemis)
       const y = sy(clef, writtenRaw.diatPos)
       if (y < minY) minY = y
       if (y > maxY) maxY = y
@@ -639,8 +675,7 @@ function draw(svgId, instrumentKey, startStep, ottavaMode = 'ottava') {
   // First pass: compute ottava info per note so we can draw brackets after
   const noteData = concertNotes.map((n, i) => {
     const x = ML + i * sp + sp / 2
-    const writtenStep = n.step + transposeSteps
-    const writtenRaw  = makeNote(writtenStep)
+    const writtenRaw  = noteInfo(n.std + transposeSemis)
     const diatPos     = writtenRaw.diatPos
     const yRaw        = sy(clef, diatPos)          // un-offset y
     const ottava      = getOttava(yRaw, ottavaMode)
@@ -727,14 +762,14 @@ function draw(svgId, instrumentKey, startStep, ottavaMode = 'ottava') {
     const sx2 = up ? x + NR - 1 : x - NR + 1
     g.appendChild(mk('line',{x1:sx2,y1:y,x2:sx2,y2:y+(up?-26:26),stroke:col.hex,'stroke-width':'1.5'}))
 
-    const labelBottom = transposeSteps !== 0
+    const labelBottom = transposeSemis !== 0
       ? `${writtenName}${writtenOct}`
       : `${n.noteName}${n.displayOct()}`
 
     g.appendChild(mk('text',{x,y:SVGH-9,'text-anchor':'middle','font-size':'9.5','font-weight':'bold',fill:col.hex,'font-family':"Observer Cover, Futura, Century Gothic, sans-serif"}, labelBottom))
     g.appendChild(mk('text',{x,y:12,'text-anchor':'middle','font-size':'8.5','font-weight':'bold',fill:col.hex,'font-family':"Observer Cover, Futura, Century Gothic, sans-serif"},n.degreeNum+''))
 
-    if(transposeSteps !== 0) {
+    if(transposeSemis !== 0) {
       g.appendChild(mk('text',{x,y:23,'text-anchor':'middle','font-size':'7.5',fill:col.hex,'font-family':"Observer Cover, Futura, Century Gothic, sans-serif"},`(${n.noteName}${n.displayOct()})`))
     }
 
@@ -748,14 +783,14 @@ function onInstrumentChange(which) {
     const inst   = document.getElementById('upperInstrument').value
     const ottava = document.getElementById('upperOttava').value
     updateTransposeNote('upperTransposeNote', inst)
-    draw('upperSvg', inst, cur * 12, ottava)
-    updateRangeLabel('upperRangeLabel', inst, cur * 12)
+    draw('upperSvg', inst, regStart(), ottava)
+    updateRangeLabel('upperRangeLabel', inst, regStart())
   } else {
     const inst   = document.getElementById('lowerInstrument').value
     const ottava = document.getElementById('lowerOttava').value
     updateTransposeNote('lowerTransposeNote', inst)
-    draw('lowerSvg', inst, cur * 12 - 12, ottava)
-    updateRangeLabel('lowerRangeLabel', inst, cur * 12 - 12)
+    draw('lowerSvg', inst, regStart() - 12, ottava)
+    updateRangeLabel('lowerRangeLabel', inst, regStart() - 12)
   }
 }
 
@@ -766,11 +801,11 @@ function updateTransposeNote(elId, instrumentKey) {
 
 function updateRangeLabel(elId, instrumentKey, startStep) {
   const inst = INSTRUMENTS[instrumentKey]
-  const ts   = inst.transposeSteps
+  const ts   = inst.transposeSemis
   const cStart = makeNote(startStep)
   const cEnd   = makeNote(startStep + 11)
-  const wStart = makeNote(startStep + ts)
-  const wEnd   = makeNote(startStep + 11 + ts)
+  const wStart = noteInfo(cStart.std + ts)
+  const wEnd   = noteInfo(cEnd.std + ts)
 
   let label
   if (ts === 0) {
@@ -795,15 +830,13 @@ function getCycleLabel(val) {
   // Each val step = 12 macrotonal steps = one 'cycle'
   // Upper staff starts at val*12, lower staff at val*12-12
   // We label by the upper staff range since that's the main reference
-  const upperStart = makeNote(val * 12)
-  const upperEnd   = makeNote(val * 12 + 11)
-  const lowerStart = makeNote(val * 12 - 12)
-  const lowerEnd   = makeNote(val * 12 - 1)
+  const upperStart = makeNote(regStart(val))
+  const upperEnd   = makeNote(regStart(val) + 11)
 
   const oct = (n) => noteMode === 'score' ? n.abletonOct + 1 : n.abletonOct
 
-  // Middle C is at step=0, which is val=0 upper staff first note
-  const isMiddleCOctave = val === 0
+  // Standard: Middle C is step 0, the val=0 upper staff's first note (other modes start elsewhere)
+  const isMiddleCOctave = upperStart.std === 0
 
   let label
   if (isMiddleCOctave) {
@@ -825,15 +858,44 @@ function setNoteMode(mode) {
   redrawAll()
 }
 
+function initModeSelects() {
+  let saved = null
+  try { saved = localStorage.getItem(MODE_STORAGE_KEY) } catch (e) {}
+  tMode = TRANSPOSITION_MODES.find(m => m.key === saved) || TRANSPOSITION_MODES[0]
+  ;['upperMode', 'lowerMode'].forEach(id => {
+    const sel = document.getElementById(id)
+    const grp = document.createElement('optgroup')
+    grp.label = 'Transposition mode'
+    TRANSPOSITION_MODES.forEach(m => {
+      const o = document.createElement('option')
+      o.value = m.key
+      o.textContent = m.label
+      grp.appendChild(o)
+    })
+    sel.appendChild(grp)
+    sel.value = tMode.key
+  })
+}
+
+function onModeChange(key) {
+  tMode = TRANSPOSITION_MODES.find(m => m.key === key) || TRANSPOSITION_MODES[0]
+  try { localStorage.setItem(MODE_STORAGE_KEY, tMode.key) } catch (e) {}
+  ;['upperMode', 'lowerMode'].forEach(id => { document.getElementById(id).value = tMode.key })
+  killAll()
+  buildButtons()
+  redrawAll()
+  showIdleHint()
+}
+
 function redrawAll() {
   const upperInst   = document.getElementById('upperInstrument').value
   const lowerInst   = document.getElementById('lowerInstrument').value
   const upperOttava = document.getElementById('upperOttava').value
   const lowerOttava = document.getElementById('lowerOttava').value
-  draw('upperSvg', upperInst, cur * 12,      upperOttava)
-  draw('lowerSvg', lowerInst, cur * 12 - 12, lowerOttava)
-  updateRangeLabel('upperRangeLabel', upperInst, cur * 12)
-  updateRangeLabel('lowerRangeLabel', lowerInst, cur * 12 - 12)
+  draw('upperSvg', upperInst, regStart(),      upperOttava)
+  draw('lowerSvg', lowerInst, regStart() - 12, lowerOttava)
+  updateRangeLabel('upperRangeLabel', upperInst, regStart())
+  updateRangeLabel('lowerRangeLabel', lowerInst, regStart() - 12)
 }
 
 function setCycle(val) {
@@ -858,6 +920,7 @@ function buildButtons() {
   })
 }
 
+initModeSelects()
 buildButtons()
 updateTransposeNote('upperTransposeNote', 'treble')
 updateTransposeNote('lowerTransposeNote', 'bass')
